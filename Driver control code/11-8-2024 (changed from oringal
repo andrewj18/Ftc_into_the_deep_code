@@ -1,0 +1,96 @@
+package org.firstinspires.ftc.teamcode.Base;
+
+import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.Servo;
+import com.qualcomm.robotcore.hardware.DigitalChannel;
+import com.qualcomm.robotcore.eventloop.opmode.OpMode;
+
+@TeleOp(name = "DriverControl") // Added name for the TeleOp mode
+public class DriverControl extends OpMode {
+  DcMotor armOne; 
+    DcMotor armTwo;
+    DcMotor liftLeft;
+    Dcmotor liftRight;
+    Servo servoClaw;
+    Servo servoBucket;
+    DigitalChannel touch; // Rename touch sensor to "touch"
+
+    @Override
+    public void init() {
+        armOne = hardwareMap.get(DcMotor.class, "armOne");
+        servoClaw = hardwareMap.get(Servo.class, "servoClaw");
+        armTwo = hardwareMap.get(DcMotor.class, "armTwo");
+        servoBucket = hardwareMap.get(Servo.class, "servoBucket");
+        
+        //touch = hardwareMap.get(DigitalChannel.class, "touch"); // Use the renamed touch sensor
+        //touch.setMode(DigitalChannel.Mode.INPUT);\
+        limitLift = hardwareMap.get(DigitalChannel.class, "limitLift"); // Use the renamed touch sensor
+        limitLift.setMode(DigitalChannel.Mode.INPUT);
+    }
+
+    @Override
+    public void loop() {
+        initDriver();
+        updateTelemetry();
+    }
+
+    public void initDriver() {
+        // Run motors when button A is pressed, until the touch sensor is pressed
+        if (gamepad1.a) {
+            armOne.setPower(0.5);
+            armTwo.setPower(0.5);
+        } else if (gamepad1.y) {
+            armOne.setPower(-0.5);
+            armTwo.setPower(-0.5);
+        } else {
+            armOne.setPower(0);
+            armTwo.setPower(0);
+        }
+
+        // Stop motors if the touch sensor is pressed
+        if (!touch.getState()) { // Assuming the sensor is active low
+            armOne.setPower(0);
+            motorTwo.setPower(0);
+        }
+
+        if (gamepad2.a) {
+            servoBucket.setPosition(0.40);
+        }
+        if (gamepad2.b) {
+            servoBucket.setPosition(0.10);
+        }
+        
+        if (gamepad2.y) {
+            servoClaw.setPosition(0.36);
+        }
+        
+        if (gamepad2.x) {
+            servoClaw.setPosition(0.15);
+        }
+        //lift for the bucket, runs motors when the left bumper is pressed,  
+         if (gamepad1.LeftBumper) {
+            liftLeft.setPower(0.5);
+            liftRight.setPower(0.5);
+        } else if (gamepad1.RightBumper) {
+            liftLeft.setPower(-0.5);
+            liftRight.setPower(-0.5);
+        } else {
+            liftLeft.setPower(0);
+            liftRight.setPower(0);
+        }
+        
+        // Stop motors if the touch sensor is pressed
+        if (!limitLift.getState()) { // Assuming the sensor is active low
+            armOne.setPower(0);
+            motorTwo.setPower(0);
+
+    }
+
+    private void updateTelemetry() {
+        // Display the state of the touch sensor
+        boolean touchState = touch.getState(); // Get the state of the touch sensor
+        telemetry.addData("Touch Sensor", touchState ? "Released" : "Pressed"); // Display the state
+        telemetry.update(); // Update the telemetry display
+    }
+}
