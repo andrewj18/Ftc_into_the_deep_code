@@ -139,10 +139,7 @@ ArmOne.setPower(0);
 ArmTwo.setPower(0); } 
 }
 // End the run arms
-
-
-
-        // Lift motors
+ // Lift motors
         if (gamepad1.x) {
             // liftLeft , liftRight
             liftLeft.setPower(0.75);
@@ -160,6 +157,25 @@ ArmTwo.setPower(0); }
             liftLeft.setPower(-1);
             liftRight.setPower(1);
         }
+else if (gamepad1.left_bumper) {
+    // toggle the motor state, either on or off. (like a switch)
+    motorState = !motorState;
+
+     if (motorState) {
+        // turn the motor on
+        liftLeft.setPower(0.2); 
+     liftRight.setPower(-0.2);
+     telemetry.addData("lifts motor State","OFF")
+
+
+}
+ else {
+    //Turn the motor off 
+    lift.Left.setPower(0);
+    liftRight.setPower(0);
+    telemetry.addData("lifts motor State","OFF")
+ }
+}
         else {
             liftLeft.setPower(0);
             liftRight.setPower(0);
