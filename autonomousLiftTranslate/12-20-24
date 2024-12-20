@@ -1,0 +1,336 @@
+package org.firstinspires.ftc.teamcode;
+
+import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
+import com.qualcomm.robotcore.hardware.DcMotor;
+import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
+import org.firstinspires.ftc.teamcode.GoBildaPinpointDriver;
+import org.firstinspires.ftc.teamcode.Base.AutoRobotStruct;
+import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
+import com.qualcomm.robotcore.hardware.DcMotor;
+
+@Autonomous(name = "AutonomousLiftTranslate", group = "Autonomous")
+public class AutonomousLiftTranslate extends LinearOpMode {
+
+  private AutoRobotStruct robot = new AutoRobotStruct(); // Hardware structure
+  private GoBildaPinpointDriver pinpointDriver;
+  private volatile boolean movementComplete1 = false;
+  private volatile boolean movementComplete2 = false;
+  private volatile boolean movementComplete3 = false;
+  private static final double TARGET_POSITIONX1 = 125.0;
+  private static final double TARGET_POSITIONY1 = -515.0;
+  private static final double middle_block_pickupX2 = 205;
+  private static final double middle_block_pickup_Y2 = -470;
+  private static final double targeLifttHeight = 5500; // height for the lift 
+  private static final double targeLifttHeightdown = 900; // height for the lift 
+  private static final double scorePositionX1 = 130; // score position X 
+  private static final double scorePositionY1 = -525; // score position Y 
+
+  @Override
+  public void runOpMode() {
+    // Initialize robot hardware
+    robot.initHardware(hardwareMap);
+    robot.bucketServo.setPosition(0.5); // Set bucketServo to 0.10 when right bumper is pressed
+
+    // Initialize GoBilda Pinpoint
+    pinpointDriver = hardwareMap.get(GoBildaPinpointDriver.class, "odo");
+
+    // Set up Pinpoint driver configuration
+    pinpointDriver.setOffsets(-84.0, -168.0);
+    pinpointDriver.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
+    pinpointDriver.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.FORWARD, GoBildaPinpointDriver.EncoderDirection.FORWARD);
+    pinpointDriver.resetPosAndIMU();
+
+    // Initialize encoders for arm motors
+    robot.liftLeft.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER); // Set ArmOne to use encoders
+    robot.liftRight.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER); // Set ArmTwo to use encoders
+    robot.liftLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER); // Set ArmOne to use encoders
+    robot.liftRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER); // Set ArmTwo to use encoders
+
+    telemetry.addData("Status", "Initialized");
+    telemetry.update();
+
+    waitForStart();
+    
+    Thread liftThread1 = new Thread(new LiftTask1());
+    Thread movementThread1 = new Thread(new MovementTask1());
+
+    liftThread1.start();
+    movementThread1.start();
+
+    try {
+      liftThread1.join(); // Ensure the lift thread completes
+      movementThread1.join(); // Ensure the movement thread completes
+    } catch (InterruptedException e) {
+      telemetry.addData("Error", "Thread interrupted: " + e.getMessage());
+      telemetry.update();
+    }
+    // Now that the movement is complete, start the backwards movement thread
+
+    Thread forwardThread2 = new Thread(new forwardMovement2());
+    Thread limitthreadDown2 = new Thread(new limitDown2());
+    sleep(200);
+    limitthreadDown2.start();
+    forwardThread2.start();
+
+    telemetry.addData("Thread Status", "Starting Second Thread");
+    telemetry.update();
+
+    try {
+      forwardThread2.join(); // Ensure backwards movement thread completes
+      limitthreadDown2.join();
+    } catch (InterruptedException e) {
+      telemetry.addData("Error", "Thread interrupted: " + e.getMessage());
+      telemetry.update();
+    }
+    // when the robot is in postion it will pick up block and go into score postion,
+    // Starting the threads
+    
+    Thread scoreThread3 = new Thread(new ScoreMovement3());
+    Thread scoreLift3 = new Thread(new scorelimitLift3());
+    sleep(200);
+    scoreLift3.start();
+    scoreThread3.start();
+
+    telemetry.addData("Thread Status", "Starting Second Thread");
+    telemetry.update();
+
+    try {
+      scoreThread3.join(); // Corrected thread variable name
+      scoreLift3.join(); // Corrected thread variable name
+    } catch (InterruptedException e) {
+      telemetry.addData("Error", "Thread interrupted: " + e.getMessage());
+      telemetry.update();
+    }
+  }
+  
+  private class LiftTask1 implements Runnable {
+    @Override
+    public void run() {
+      // Set target encoder positions for ArmOne and ArmTwo
+      robot.ArmOne.setPower(-0.45);
+      robot.ArmTwo.setPower(-0.45);
+      sleep(400);
+      robot.ArmOne.setPower(0);
+      robot.ArmTwo.setPower(0);
+
+      // Set the arm motors to move (start lifting)
+      robot.liftLeft.setPower(0.75);
+      robot.liftRight.setPower(-0.75);
+
+      // Wait until both ArmOne and ArmTwo reach the target encoder position
+      //&& (Math.abs(robot.ArmTwo.getCurrentPosition()) < targetHeight))//
+      while (opModeIsActive() && (Math.abs(robot.liftLeft.getCurrentPosition()) < targeLifttHeight)) {
+        telemetry.addData("lift left Encoder", robot.liftLeft.getCurrentPosition());
+        telemetry.addData("lift right Encoder", robot.liftRight.getCurrentPosition());
+        telemetry.addData("Target Height", targeLifttHeight);
+        telemetry.update();
+      }
+
+      // Once target height is reached, stop the motors
+      robot.liftLeft.setPower(.1);
+      robot.liftRight.setPower(-.1);
+      sleep(300);
+
+      robot.bucketServo.setPosition(0.15); // Set bucketServo to 0.40 when button left bumper is pressed score 
+      sleep(600);
+      robot.bucketServo.setPosition(0.50); // Set bucketServo to 0.40 when button left bumper is pressed score 
+
+    }
+  }
+  
+  // Task to handle the bringing the lift down
+  private class limitDown2 implements Runnable {
+    @Override
+    public void run() {
+
+      robot.liftLeft.setPower(-0.5);
+      robot.liftRight.setPower(0.5);
+
+      // Wait until both ArmOne and ArmTwo reach the target encoder position
+      //&& (Math.abs(robot.ArmTwo.getCurrentPosition()) < targetHeight))//
+      while (opModeIsActive() && (Math.abs(robot.liftLeft.getCurrentPosition()) > targeLifttHeightdown)) {
+        telemetry.addData("lift left Encoder", robot.liftLeft.getCurrentPosition());
+        telemetry.addData("lift right Encoder", robot.liftRight.getCurrentPosition());
+        telemetry.addData("Target Height", targeLifttHeight);
+        telemetry.update();
+
+      }
+      robot.liftLeft.setPower(0.05);
+      robot.liftRight.setPower(-0.05);
+
+    }
+  }
+  
+  // Task to handle bring the arm into scoring postion
+  private class scorelimitLift3 implements Runnable {
+    @Override
+    public void run() {
+
+       // Set the arm motors to move (start lifting)
+      robot.liftLeft.setPower(0.75);
+      robot.liftRight.setPower(-0.75);
+
+      // Wait until both ArmOne and ArmTwo reach the target encoder position
+      //&& (Math.abs(robot.ArmTwo.getCurrentPosition()) < targetHeight))//
+      while (opModeIsActive() && (Math.abs(robot.liftLeft.getCurrentPosition()) < targeLifttHeight)) {
+        telemetry.addData("lift left Encoder", robot.liftLeft.getCurrentPosition());
+        telemetry.addData("lift right Encoder", robot.liftRight.getCurrentPosition());
+        telemetry.addData("Target Height", targeLifttHeight);
+        telemetry.update();
+      }
+
+      // Once target height is reached, stop the motors
+      robot.liftLeft.setPower(.1);
+      robot.liftRight.setPower(-.1);
+      sleep(300);
+
+      robot.bucketServo.setPosition(0.15); // Set bucketServo to 0.40 when button left bumper is pressed score 
+      sleep(600);
+      robot.bucketServo.setPosition(0.50); // Set bucketServo to 0.40 when button left bumper is pressed score 
+
+
+    }
+  }
+  // Task to handle bring the arm into scoring postion
+
+  // Task to handle movement based on odometry feedback
+  
+  private class MovementTask1 implements Runnable {
+    @Override
+    public void run() {
+      while (!movementComplete1 && opModeIsActive()) {
+        pinpointDriver.update(); // Refresh odometry data
+        Pose2D pose = pinpointDriver.getPosition();
+        double x = pose.getX(DistanceUnit.MM);
+        double y = pose.getY(DistanceUnit.MM);
+
+        // Move forward until y reaches TARGET_POSITION
+        // Strafe right until x reaches TARGET_POSITION
+        if (x < TARGET_POSITIONX1) {
+          robot.setDriverMotorPower(0.4, 0.4, 0.4, 0.4); // Move forward
+        } else if (y > TARGET_POSITIONY1) {
+          robot.setDriverMotorPower(0.5, -0.5, -0.5, 0.5); // Strafe right
+        }
+        // Stop when both x and y have reached or exceeded the target
+        else {
+          //             bucketServo.setPosition(0.5); // if this does nothing, switch to other servor position.
+          robot.setDriverMotorPower(0, 0, 0, 0); // Stop all motors
+          movementComplete1 = true;
+        }
+
+        telemetry.addData("X (mm)", x);
+        telemetry.addData("Y (mm)", y);
+        telemetry.update();
+      }
+    }
+
+  }
+  
+  // Task to move the robot into the correct postion to score
+  private class forwardMovement2 implements Runnable {
+    @Override
+    public void run() {
+      while (!movementComplete2 &&opModeIsActive()) {
+        pinpointDriver.update(); // Refresh odometry data
+        Pose2D pose = pinpointDriver.getPosition();
+        double x = pose.getX(DistanceUnit.MM);
+        double y = pose.getY(DistanceUnit.MM);
+
+        // Indicate that we've entered the backwards movement thread
+        telemetry.addData("Thread Status", "Entered forward Movement Thread");
+        telemetry.update();
+
+        // Add telemetry for debugging to show the current position
+        telemetry.addData("Forwards Movement X (mm)", x); // Display X position
+        telemetry.addData("Forwards Movement Y (mm)", y); // Display Y position
+        telemetry.addData("Thread Status", "Moving forward"); // Confirm thread activity
+        telemetry.update();
+
+        // Move forward until y reaches TARGET_POSITION
+        if (x < middle_block_pickupX2) {
+          robot.setDriverMotorPower(0.4, 0.4, 0.4, 0.4); // Move forward
+
+        } else if (y < middle_block_pickup_Y2) {
+          robot.setDriverMotorPower(-0.5, 0.5, 0.5, -0.5); // Strafe right
+        } else {
+          //             bucketServo.setPosition(0.5); // if this does nothing, switch to other servor position.
+          robot.setDriverMotorPower(0, 0, 0, 0); // Stop all motors
+            movementComplete2 = true;
+          sleep(300);
+
+          while (opModeIsActive() && !robot.touchgrab.isPressed()) {
+            robot.ArmOne.setPower(-.2); // stop
+            robot.ArmTwo.setPower(-.2);
+
+
+          }
+
+          robot.ArmOne.setPower(0); // go 
+          robot.ArmTwo.setPower(0);
+      
+          sleep(1000);     //  Put code here to grab block
+
+        }
+        
+         while (opModeIsActive() && !robot.touchdrop.isPressed()) {
+            robot.ArmOne.setPower(.2); // stop
+            robot.ArmTwo.setPower(.2);
+
+          }
+
+          robot.ArmOne.setPower(0); // go 
+          robot.ArmTwo.setPower(0);
+
+        }
+
+
+      
+      }
+
+    }
+
+ 
+ private class ScoreMovement3 implements Runnable {
+      @Override
+      public void run() {
+        while (!movementComplete3 && opModeIsActive()) {
+          pinpointDriver.update(); // Refresh odometry data
+          Pose2D pose = pinpointDriver.getPosition();
+          double x = pose.getX(DistanceUnit.MM);
+          double y = pose.getY(DistanceUnit.MM);
+
+          // Move backwards until y reaches TARGET_POSITION
+          // Strafe right until x reaches TARGET_POSITION
+          if (x > scorePositionX1) {
+            robot.setDriverMotorPower(-0.4, -0.4, -0.4, -0.4); // Move backwards
+          } else if (y > scorePositionY1) {
+            robot.setDriverMotorPower(-0.5, 0.5, 0.5, -0.5); // Strafe left
+          }
+          // Stop when both x and y have reached or exceeded the target
+          else {
+            //             bucketServo.setPosition(0.5); // if this does nothing, switch to other servor position.
+            robot.setDriverMotorPower(0, 0, 0, 0); // Stop all motors
+            movementComplete3 = true;
+          }
+
+          telemetry.addData("X (mm)", x);
+          telemetry.addData("Y (mm)", y);
+          telemetry.update();
+        }
+      }
+
+
+}
+    // Helper method to sleep without exception interruptions
+    private void sleep(int milliseconds) {
+      try {
+        Thread.sleep(milliseconds);
+      } catch (InterruptedException e) {
+        Thread.currentThread().interrupt();
+        telemetry.addData("Error", "Sleep interrupted: " + e.getMessage());
+        telemetry.update();
+      }
+    }
+  }
+
